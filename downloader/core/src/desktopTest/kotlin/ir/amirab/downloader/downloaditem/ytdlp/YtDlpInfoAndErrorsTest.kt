@@ -54,6 +54,22 @@ class YtDlpInfoAndErrorsTest {
     }
 
     @Test
+    fun `403 in fragment mode falls back to a single connection once`() {
+        val tail = listOf(
+            "[download] Got error: HTTP Error 403: Forbidden. Giving up after 10 retries",
+            "ERROR: fragment 1 not found, unable to continue",
+        )
+        val err = YtDlpErrorClassifier.classify(tail, 1)
+        assertTrue(YtDlpFallbackPolicy.shouldFallBackToSingleConnection(err, usedFragments = true, alreadyFellBack = false, outputTail = tail))
+        // only once, and only if fragments were used
+        assertFalse(YtDlpFallbackPolicy.shouldFallBackToSingleConnection(err, usedFragments = true, alreadyFellBack = true, outputTail = tail))
+        assertFalse(YtDlpFallbackPolicy.shouldFallBackToSingleConnection(err, usedFragments = false, alreadyFellBack = false, outputTail = tail))
+        // a private video is not a fragment problem
+        val priv = listOf("ERROR: [youtube] abc: Private video")
+        assertFalse(YtDlpFallbackPolicy.shouldFallBackToSingleConnection(YtDlpErrorClassifier.classify(priv, 1), true, false, priv))
+    }
+
+    @Test
     fun `info without a valid id is rejected`() {
         assertFailsWith<IllegalArgumentException> { YtDlpInfoParser.parse("""{"id":"--exec","formats":[]}""") }
     }

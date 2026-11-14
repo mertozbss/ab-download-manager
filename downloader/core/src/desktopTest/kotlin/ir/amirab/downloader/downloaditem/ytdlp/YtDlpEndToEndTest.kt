@@ -22,6 +22,8 @@ class YtDlpEndToEndTest {
     private val root = File(System.getenv("ABDM_E2E_DIR") ?: "build/ytdlp-e2e").absoluteFile
     private val url = YouTubeUrlNormalizer.normalize(System.getenv("ABDM_E2E_URL") ?: "")
         ?: "https://www.youtube.com/watch?v=BaW_jenozKc"
+    // pause/resume needs a video big enough to be stopped mid-stream
+    private val resumeUrl = YouTubeUrlNormalizer.normalize(System.getenv("ABDM_E2E_RESUME_URL") ?: "") ?: url
 
     private data class RunResult(
         val exit: Int,
@@ -40,9 +42,10 @@ class YtDlpEndToEndTest {
         limitRate: Long = 0,
         stopAfterBytes: Long? = null,
         aggregator: YtDlpProgressAggregator = YtDlpProgressAggregator(quality.expectedDownloadPhases(), null),
+        link: String = url,
     ): RunResult {
         folder.mkdirs(); temp.mkdirs()
-        val args = YtDlpArgsBuilder.downloadArgs(tools, url, quality, folder, temp, name, limitRate)
+        val args = YtDlpArgsBuilder.downloadArgs(tools, link, quality, folder, temp, name, limitRate)
         println("ARGS: " + args.joinToString(" "))
         val p = YtDlpProcesses.start(args, temp)
         val tail = LineTail(200)
@@ -116,18 +119,22 @@ class YtDlpEndToEndTest {
         val folder = File(root, "out-resume")
         val temp = File(root, "temp-resume")
         folder.deleteRecursively(); temp.deleteRecursively()
-        val name = YtDlpFileNames.suggestedFileName(info.title, info.id, q)
-        val agg = YtDlpProgressAggregator(q.expectedDownloadPhases(), options.firstOrNull { it.quality == q }?.estimatedSize)
-        val first = runDownload(tools, q, folder, temp, name, limitRate = 150_000, stopAfterBytes = 300_000, aggregator = agg)
+        val name = "resume-test.mp4"
+        val agg = YtDlpProgressAggregator(q.expectedDownloadPhases(), null)
+        // fragment mode resumes per fragment (~10 MB each, 8 in flight): stop late enough that some finished
+        val stopAt = 60_000_000L
+        val first = runDownload(tools, q, folder, temp, name, link = resumeUrl, stopAfterBytes = stopAt, aggregator = agg)
         assertTrue(first.exit != 0, "first run should have been killed")
-        val parts = temp.walkTopDown().filter { it.isFile && it.name.endsWith(".part") }.toList()
-        println("PARTS after pause: ${parts.map { it.name + "=" + it.length() }}")
-        if (parts.isEmpty()) fail("no .part file kept for resume")
-        val second = runDownload(tools, q, folder, temp, name, aggregator = agg)
+        // plain https streams leave "<name>.part"; dashy/fragment mode leaves ".part-FragN" + ".ytdl"
+        val parts = temp.walkTopDown().filter { it.isFile && (".part" in it.name || it.name.endsWith(".ytdl")) }.toList()
+        println("PARTS after pause: ${parts.size} files, ${parts.sumOf { it.length() } / 1024} KiB, e.g. ${parts.take(3).map { it.name }}")
+        if (parts.isEmpty()) fail("no partial files kept for resume")
+        val second = runDownload(tools, q, folder, temp, name, link = resumeUrl, aggregator = agg)
         assertEquals(0, second.exit)
-        val firstReported = second.progress.firstOrNull { (it.downloadedBytes ?: 0) > 0 }?.downloadedBytes ?: 0
+        // fragment mode may print a line or two before it loads the resume state
+        val firstReported = second.progress.take(5).maxOfOrNull { it.downloadedBytes ?: 0 } ?: 0
         println("RESUME: first downloaded value after resume = $firstReported, percents=${(first.percents + second.percents).distinct()}")
-        assertTrue(firstReported >= 250_000, "resume restarted from scratch")
+        assertTrue(firstReported >= 10_000_000, "resume restarted from scratch")
         assertEquals((first.percents + second.percents).sorted(), first.percents + second.percents, "percent went backwards across resume")
         assertNotNull(second.file)
 

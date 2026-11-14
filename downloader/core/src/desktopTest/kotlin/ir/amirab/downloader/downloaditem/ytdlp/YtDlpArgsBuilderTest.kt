@@ -88,6 +88,20 @@ class YtDlpArgsBuilderTest {
     }
 
     @Test
+    fun `parallel fragments follow the connection setting`() {
+        val args = YtDlpArgsBuilder.downloadArgs(tools, url, YtDlpQuality.Best1080, File("C:/D"), File("C:/T"), "a.mp4", connections = 32)
+        assertEquals("youtube:formats=dashy", args[args.indexOf("--extractor-args") + 1])
+        assertEquals("16", args[args.indexOf("--concurrent-fragments") + 1])
+        val single = YtDlpArgsBuilder.downloadArgs(tools, url, YtDlpQuality.Best1080, File("C:/D"), File("C:/T"), "a.mp4", connections = 1)
+        assertFalse("--concurrent-fragments" in single)
+        // speed limit would be multiplied by the fragment count -> single connection
+        val limited = YtDlpArgsBuilder.downloadArgs(tools, url, YtDlpQuality.Best1080, File("C:/D"), File("C:/T"), "a.mp4", speedLimitBytesPerSecond = 1_000_000, connections = 8)
+        assertFalse("--concurrent-fragments" in limited)
+        assertEquals("1000000", limited[limited.indexOf("--limit-rate") + 1])
+        assertEquals(listOf("--", url), args.takeLast(2))
+    }
+
+    @Test
     fun `forbidden options are never produced`() {
         val all = download() + YtDlpArgsBuilder.infoArgs(tools, url) +
                 YtDlpQuality.entries.flatMap { download(quality = it) }

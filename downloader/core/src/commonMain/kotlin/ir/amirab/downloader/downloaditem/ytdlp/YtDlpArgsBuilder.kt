@@ -47,6 +47,9 @@ object YtDlpArgsBuilder {
         "--update-to",
     )
 
+    const val DEFAULT_CONNECTIONS = 8
+    const val MAX_CONNECTIONS = 16
+
     const val PROGRESS_PREFIX = "ABDM|"
     const val FILE_PREFIX = "ABDMFILE|"
 
@@ -109,6 +112,7 @@ object YtDlpArgsBuilder {
         tempFolder: File,
         fileName: String,
         speedLimitBytesPerSecond: Long = 0,
+        connections: Int = DEFAULT_CONNECTIONS,
     ): List<String> {
         val safeUrl = validateUrl(url)
         val args = buildList {
@@ -123,6 +127,14 @@ object YtDlpArgsBuilder {
             add("--progress")
             add("--progress-template"); add(PROGRESS_TEMPLATE)
             add("--print"); add(FILEPATH_PRINT_TEMPLATE)
+            // one HTTP connection per stream is slow; let yt-dlp fetch YouTube's streams as DASH
+            // fragments and download several of them in parallel (~1.8x faster in tests)
+            // --limit-rate applies per connection in fragment mode, so a speed limit means 1 connection
+            val n = if (speedLimitBytesPerSecond > 0) 1 else connections.coerceIn(1, MAX_CONNECTIONS)
+            if (n > 1) {
+                add("--extractor-args"); add("youtube:formats=dashy")
+                add("--concurrent-fragments"); add(n.toString())
+            }
             if (speedLimitBytesPerSecond > 0) {
                 add("--limit-rate"); add(speedLimitBytesPerSecond.toString())
             }

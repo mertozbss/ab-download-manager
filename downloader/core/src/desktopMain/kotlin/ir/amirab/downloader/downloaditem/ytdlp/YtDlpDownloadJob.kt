@@ -47,7 +47,14 @@ class YtDlpDownloadJob(
     @Volatile
     private var stopRequested = false
     private var aggregator: YtDlpProgressAggregator? = null
-    private val tail = LineTail()
+    // output of the current run only (a fresh one per run, so old errors never leak into a new run)
+    @Volatile
+    private var tail = LineTail()
+
+    // YouTube sometimes answers the parallel DASH-fragment requests with 403; then we fall back to
+    // the slower single-connection mode for the rest of this job's life
+    private var singleConnectionFallback = false
+    private var lastRunUsedFragments = false
 
     private var failedTries = 0
     private var bytesBeforeRetry = 0L
@@ -102,7 +109,10 @@ class YtDlpDownloadJob(
                     tempFolder = tempDir,
                     fileName = downloadItem.name,
                     speedLimitBytesPerSecond = downloadItem.speedLimit,
+                    connections = connectionsForThisRun(),
                 )
+                lastRunUsedFragments = "--concurrent-fragments" in args
+                tail = LineTail()
                 stopRequested = false
                 aggregator = YtDlpProgressAggregator(
                     expectedPhases = downloadItem.quality.expectedDownloadPhases(),
@@ -132,6 +142,11 @@ class YtDlpDownloadJob(
                 scope.launch { failed(toReport, isFirstAttempt) }
             }
         }.join()
+    }
+
+    private fun connectionsForThisRun(): Int {
+        if (singleConnectionFallback) return 1
+        return downloadItem.preferredConnectionCount ?: downloadManager.settings.defaultThreadCount
     }
 
     private fun readStderr(p: Process) {
@@ -223,6 +238,13 @@ class YtDlpDownloadJob(
     }
 
     private suspend fun failed(e: Throwable, isFirstAttempt: Boolean) {
+        if (!stopRequested && shouldFallBackToSingleConnection(e)) {
+            singleConnectionFallback = true
+            // fragment files can't be continued in the other mode; start this item over (UI progress stays clamped)
+            withContext(Dispatchers.IO) { destination.deleteTempDir() }
+            retry(isFirstAttempt)
+            return
+        }
         val retryable = e is YtDlpException && !e.isCritical()
         if (retryable && !stopRequested) {
             if (downloadItem.downloadedBytes > bytesBeforeRetry) failedTries = 0 else failedTries++
@@ -234,6 +256,15 @@ class YtDlpDownloadJob(
             }
         }
         pause(e)
+    }
+
+    private fun shouldFallBackToSingleConnection(e: Throwable): Boolean {
+        return YtDlpFallbackPolicy.shouldFallBackToSingleConnection(
+            error = e,
+            usedFragments = lastRunUsedFragments,
+            alreadyFellBack = singleConnectionFallback,
+            outputTail = tail.snapshot(),
+        )
     }
 
     private fun retry(isFirstAttempt: Boolean) {
