@@ -14,6 +14,7 @@ import ir.amirab.downloader.NewDownloadItemProps
 import ir.amirab.downloader.downloaditem.EmptyContext
 import ir.amirab.downloader.downloaditem.hls.HLSDownloadCredentials
 import ir.amirab.downloader.downloaditem.http.HttpDownloadCredentials
+import ir.amirab.downloader.downloaditem.ytdlp.YtDlpDownloadCredentials
 import ir.amirab.downloader.queue.QueueManager
 import ir.amirab.downloader.utils.OnDuplicateStrategy
 import org.koin.core.component.KoinComponent
@@ -29,14 +30,21 @@ class IntegrationHandlerImp : IntegrationHandler, KoinComponent {
     override suspend fun addDownloadByGui(
         request: AddDownloadsFromIntegration
     ) {
-        val list = request.items
+        // invalid YouTube links are dropped here (the URL is re-validated by the app, not trusted)
+        val list = request.items.filter { item ->
+            item !is YtDlpDownloadCredentialsFromIntegration ||
+                    runCatching { YtDlpDownloadCredentials.createValidated(item.link) }.isSuccess
+        }
+        if (list.isEmpty()) return
         val options = request.options
+        // YouTube downloads always open the quality window, even with "add silently" on
+        val hasYouTube = list.any { it is YtDlpDownloadCredentialsFromIntegration }
         appComponent.externalCredentialComingIntoApp(
             list.map {
                 convertToDownloadSystemCredentials(it)
             },
             options = ImportOptions(
-                silentImport = if (options.silentAdd) {
+                silentImport = if (options.silentAdd && !hasYouTube) {
                     SilentImportOptions(
                         silentDownload = options.silentStart
                     )
@@ -105,6 +113,14 @@ class IntegrationHandlerImp : IntegrationHandler, KoinComponent {
                         link = it.link,
                         headers = it.headers,
                         downloadPage = it.downloadPage,
+                    )
+                }
+
+                is YtDlpDownloadCredentialsFromIntegration -> {
+                    // normalizes to https://www.youtube.com/watch?v=<id>, throws for anything else
+                    YtDlpDownloadCredentials.createValidated(
+                        link = it.link,
+                        title = it.title,
                     )
                 }
             }

@@ -127,6 +127,11 @@ import ir.amirab.downloader.downloaditem.DownloadJob
 import ir.amirab.downloader.downloaditem.IDownloadCredentials
 import ir.amirab.downloader.downloaditem.IDownloadItem
 import ir.amirab.downloader.downloaditem.hls.HLSDownloader
+import ir.amirab.downloader.downloaditem.ytdlp.YtDlpDownloader
+import ir.amirab.downloader.downloaditem.ytdlp.tools.OkHttpToolHttpClient
+import ir.amirab.downloader.downloaditem.ytdlp.tools.YtDlpToolManager
+import com.abdownloadmanager.shared.downloaderinui.ytdlp.YtDlpDownloaderInUi
+import com.abdownloadmanager.integration.model.YtDlpDownloadCredentialsFromIntegration
 import ir.amirab.downloader.downloaditem.http.HttpDownloadCredentials
 import ir.amirab.downloader.downloaditem.http.HttpDownloadItem
 import ir.amirab.downloader.downloaditem.http.HttpDownloader
@@ -241,8 +246,23 @@ val downloaderModule = module {
     single {
         HttpDownloaderInUi(get(), get())
     }
+    // YouTube via yt-dlp (desktop only, mertozbss fork); helpers live in <dataDir>/tools
+    single {
+        YtDlpToolManager(
+            toolsDir = get<DefinedPaths>().dataDir.resolve("tools").toFile(),
+            http = OkHttpToolHttpClient(),
+        )
+    }
+    single {
+        YtDlpDownloader(get())
+    }
+    single {
+        YtDlpDownloaderInUi(get(), get())
+    }
     single {
         DownloaderInUiRegistry().apply {
+            // first, so pasted YouTube links are matched to yt-dlp
+            add(get<YtDlpDownloaderInUi>())
             add(get<HttpDownloaderInUi>())
             add(get<HLSDownloaderInUi>())
         }
@@ -251,6 +271,7 @@ val downloaderModule = module {
         DownloaderRegistry().apply {
             add(get<HttpDownloader>())
             add(get<HLSDownloader>())
+            add(get<YtDlpDownloader>())
         }
     }
     single {
@@ -416,6 +437,10 @@ val jsonModule = module {
                     subclass(
                         HLSDownloadCredentialsFromIntegration::class,
                         HLSDownloadCredentialsFromIntegration.serializer()
+                    )
+                    subclass(
+                        YtDlpDownloadCredentialsFromIntegration::class,
+                        YtDlpDownloadCredentialsFromIntegration.serializer()
                     )
                     defaultDeserializer {
                         HttpDownloadCredentialsFromIntegration.serializer()
