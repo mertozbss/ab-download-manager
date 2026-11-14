@@ -52,6 +52,7 @@ class YtDlpArgsBuilderTest {
         assertEquals("deno:" + tools.deno!!.absolutePath, args[js + 1])
         assertEquals(tools.ffmpegDir!!.absolutePath, args[args.indexOf("--ffmpeg-location") + 1])
         assertTrue("--no-remote-components" in args)
+        assertEquals("utf-8", args[args.indexOf("--encoding") + 1])
     }
 
     @Test

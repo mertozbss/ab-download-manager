@@ -37,8 +37,10 @@ class YtDlpException(
                 YtDlpErrorKind.AgeRestricted -> "This video is age-restricted (sign-in required). / Video yaş kısıtlı (giriş gerekiyor)."
                 YtDlpErrorKind.Unavailable -> "This video is unavailable. / Video kullanılamıyor."
                 YtDlpErrorKind.LiveNotStarted -> "This live stream has not started yet. / Canlı yayın henüz başlamadı."
-                YtDlpErrorKind.NeedsUpdate -> "YouTube rejected the request. Update yt-dlp: Settings > YouTube > Update components. / " +
-                        "YouTube isteği reddetti. yt-dlp'yi güncelle: Ayarlar > YouTube > Bileşenleri güncelle."
+                YtDlpErrorKind.NeedsUpdate -> "YouTube rejected the request (403 / bot check). Update yt-dlp: Settings > YouTube > Update components. " +
+                        "If it keeps happening, wait a while and try again. / " +
+                        "YouTube isteği reddetti (403 / bot doğrulaması). yt-dlp'yi güncelle: Ayarlar > YouTube > Bileşenleri güncelle. " +
+                        "Devam ederse bir süre bekleyip tekrar dene."
                 YtDlpErrorKind.Network -> "Network error. / Ağ hatası."
                 YtDlpErrorKind.InvalidUrl -> "Not a supported YouTube video URL. / Desteklenmeyen YouTube adresi."
                 YtDlpErrorKind.ToolsMissing -> "YouTube components (yt-dlp/ffmpeg/deno) could not be installed. / YouTube bileşenleri kurulamadı."
@@ -91,7 +93,7 @@ object YtDlpErrorClassifier {
             "confirm your age" in text || "age-restricted" in text || "age restricted" in text -> YtDlpErrorKind.AgeRestricted
             "live event will begin" in text || "premieres in" in text -> YtDlpErrorKind.LiveNotStarted
             needsUpdatePatterns.any { it in text } -> YtDlpErrorKind.NeedsUpdate
-            "video unavailable" in text || "has been removed" in text || "not available in your country" in text -> YtDlpErrorKind.Unavailable
+            "video unavailable" in text || "video is unavailable" in text || "has been removed" in text || "not available in your country" in text -> YtDlpErrorKind.Unavailable
             networkPatterns.any { it in text } -> YtDlpErrorKind.Network
             else -> YtDlpErrorKind.Unknown
         }

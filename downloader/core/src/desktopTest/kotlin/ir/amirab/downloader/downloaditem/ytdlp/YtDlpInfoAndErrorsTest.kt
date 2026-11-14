@@ -56,6 +56,7 @@ class YtDlpInfoAndErrorsTest {
         assertEquals(YtDlpErrorKind.NeedsUpdate, k("ERROR: [youtube] abc: Sign in to confirm you’re not a bot."))
         assertEquals(YtDlpErrorKind.NeedsUpdate, k("WARNING: [youtube] n challenge solving failed", "ERROR: unable to download video data: HTTP Error 403: Forbidden"))
         assertEquals(YtDlpErrorKind.Unavailable, k("ERROR: [youtube] abc: Video unavailable"))
+        assertEquals(YtDlpErrorKind.Unavailable, k("ERROR: [youtube] BaW_jenozKc: This video is unavailable"))
         assertEquals(YtDlpErrorKind.Network, k("ERROR: unable to download video data: <urlopen error timed out>"))
         assertEquals(YtDlpErrorKind.Unknown, k("something odd"))
         val e = YtDlpErrorClassifier.classify(listOf("ERROR: HTTP Error 403: Forbidden"), 1)

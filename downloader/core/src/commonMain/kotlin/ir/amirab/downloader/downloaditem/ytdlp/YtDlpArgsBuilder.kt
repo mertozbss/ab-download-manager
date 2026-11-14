@@ -86,6 +86,10 @@ object YtDlpArgsBuilder {
             add(it.absolutePath)
         }
         add("--no-color")
+        // the Windows exe ignores PYTHONIOENCODING and prints in the ANSI code page otherwise,
+        // which would corrupt non-ASCII file paths reported by --print
+        add("--encoding")
+        add("utf-8")
     }
 
     /** `yt-dlp -J` : metadata + formats for the quality window */
