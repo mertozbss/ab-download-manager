@@ -126,8 +126,14 @@ class YtDlpProgressAggregator(
         lastPercent = maxOf(lastPercent, computedPercent.coerceIn(0, 99))
         lastDownloaded = maxOf(lastDownloaded, sumDownloaded)
 
-        val total = if (phases.size >= phaseCount) sumKnownTotal else maxOf(expected ?: 0, sumKnownTotal)
-        lastTotal = maxOf(total, lastDownloaded).takeIf { it > 0 }
+        // while the audio part hasn't started, the video size alone is not the total:
+        // keep it unknown (no wrong "remaining time") unless the quality window gave an estimate
+        val total: Long? = when {
+            phases.size >= phaseCount -> sumKnownTotal
+            expected != null -> maxOf(expected, sumKnownTotal)
+            else -> null
+        }
+        lastTotal = total?.let { maxOf(it, lastDownloaded) }?.takeIf { it > 0 }
 
         snapshot = Snapshot(lastDownloaded, lastTotal, lastPercent, line.speed, line.eta)
         return snapshot

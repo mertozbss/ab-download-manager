@@ -104,6 +104,7 @@ class YtDlpDownloaderInUi(
             progress = item.downloadedBytes,
             percent = item.progressPercent,
             isWaiting = props.isWaiting,
+            showSizeInBytes = true,
         )
     }
 

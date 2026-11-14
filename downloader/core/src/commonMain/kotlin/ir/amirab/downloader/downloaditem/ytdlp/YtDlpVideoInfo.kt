@@ -24,6 +24,13 @@ data class YtDlpFormatInfo(
     val hasVideo get() = vcodec != null && vcodec != "none"
     val hasAudio get() = acodec != null && acodec != "none"
     val size: Long? get() = filesize ?: filesizeApprox
+
+    /** filesize, or an estimate from the bitrate (kbit/s) when YouTube doesn't report one */
+    fun sizeOrEstimate(durationSeconds: Double?): Long? {
+        return size ?: if (tbr != null && durationSeconds != null && tbr > 0 && durationSeconds > 0) {
+            (tbr * 1000 / 8 * durationSeconds).toLong()
+        } else null
+    }
 }
 
 data class YtDlpVideoInfo(
@@ -100,7 +107,7 @@ object YtDlpInfoParser {
 
         fun sum(vararg f: YtDlpFormatInfo?): Long? {
             if (f.any { it == null }) return null
-            val sizes = f.map { it!!.size }
+            val sizes = f.map { it!!.sizeOrEstimate(info.duration) }
             return if (sizes.any { it == null }) null else sizes.sumOf { it!! }
         }
 
@@ -118,7 +125,7 @@ object YtDlpInfoParser {
             }
         }
         if (audios.isNotEmpty() || videos.isEmpty()) {
-            result += YtDlpQualityOption(YtDlpQuality.AudioM4a, (bestM4a ?: bestAudio)?.size)
+            result += YtDlpQualityOption(YtDlpQuality.AudioM4a, (bestM4a ?: bestAudio)?.sizeOrEstimate(info.duration))
             // MP3 is re-encoded (VBR ~245 kbps for --audio-quality 0): rough estimate from duration
             result += YtDlpQualityOption(
                 YtDlpQuality.AudioMp3,

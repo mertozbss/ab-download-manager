@@ -183,7 +183,7 @@ class YtDlpDownloadJob(
         val s = agg.onProgress(line)
         downloadItem.downloadedBytes = s.downloadedBytes
         downloadItem.progressPercent = s.percent
-        s.totalBytes?.let { downloadItem.contentLength = it }
+        downloadItem.contentLength = s.totalBytes ?: IDownloadItem.LENGTH_UNKNOWN
         if (_status.value !is DownloadJobStatus.Downloading) {
             _status.value = DownloadJobStatus.Downloading
         }

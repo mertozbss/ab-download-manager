@@ -44,6 +44,16 @@ class YtDlpInfoAndErrorsTest {
     }
 
     @Test
+    fun `size is estimated from bitrate when youtube gives no filesize`() {
+        val json = """{"id":"BaW_jenozKc","duration":100,"formats":[
+            {"format_id":"140","ext":"m4a","vcodec":"none","acodec":"mp4a","tbr":128},
+            {"format_id":"137","ext":"mp4","height":1080,"vcodec":"avc1","acodec":"none","tbr":4000}]}"""
+        val best = YtDlpInfoParser.qualityOptions(YtDlpInfoParser.parse(json)).first { it.quality == YtDlpQuality.Best1080 }
+        // (4000 + 128) kbit/s * 100 s / 8
+        assertEquals(51_600_000L, best.estimatedSize)
+    }
+
+    @Test
     fun `info without a valid id is rejected`() {
         assertFailsWith<IllegalArgumentException> { YtDlpInfoParser.parse("""{"id":"--exec","formats":[]}""") }
     }

@@ -305,7 +305,7 @@ abstract class BaseSingleDownloadComponent<
                             )
                         })
                 )
-                if (it is DurationBasedProcessingDownloadItemState) {
+                if (it is DurationBasedProcessingDownloadItemState && !it.showSizeInBytes) {
                     add(
                         SingleDownloadPagePropertyItem(
                             Res.string.size.asStringSource(),

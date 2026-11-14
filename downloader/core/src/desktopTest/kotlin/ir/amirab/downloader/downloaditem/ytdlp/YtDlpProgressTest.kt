@@ -56,6 +56,8 @@ class YtDlpProgressTest {
         feed("ABDM|137|500|1000|NA|NA|NA")
         feed("ABDM|137|1000|1000|NA|NA|NA")
         assertEquals(50, percents.last()) // video done = half of the job
+        // audio not started yet and no estimate: the total must stay unknown (no bogus remaining time)
+        assertNull(agg.snapshot.totalBytes)
         feed("ABDM|140|0|200|NA|NA|NA")   // audio starts: must not drop
         feed("ABDM|140|100|200|NA|NA|NA")
         feed("ABDM|140|200|200|NA|NA|NA")
