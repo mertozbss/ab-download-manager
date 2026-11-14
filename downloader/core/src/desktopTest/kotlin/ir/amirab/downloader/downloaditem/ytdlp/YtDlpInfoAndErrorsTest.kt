@@ -70,6 +70,17 @@ class YtDlpInfoAndErrorsTest {
     }
 
     @Test
+    fun `hls peak bitrate does not inflate the estimate`() {
+        // real data from 5K8B8x5ix_E (28:45): HLS 270 tbr 4914 has no size, https 137 has 511887338 bytes
+        val json = """{"id":"5K8B8x5ix_E","duration":1725,"formats":[
+            {"format_id":"140","ext":"m4a","vcodec":"none","acodec":"mp4a","tbr":129.4,"filesize":27920403},
+            {"format_id":"270","ext":"mp4","height":1080,"vcodec":"avc1","acodec":"none","tbr":4914.6},
+            {"format_id":"137","ext":"mp4","height":1080,"vcodec":"avc1","acodec":"none","tbr":2373.9,"filesize":511887338}]}"""
+        val best = YtDlpInfoParser.qualityOptions(YtDlpInfoParser.parse(json)).first { it.quality == YtDlpQuality.Best1080 }
+        assertEquals(511887338L + 27920403L, best.estimatedSize)
+    }
+
+    @Test
     fun `info without a valid id is rejected`() {
         assertFailsWith<IllegalArgumentException> { YtDlpInfoParser.parse("""{"id":"--exec","formats":[]}""") }
     }

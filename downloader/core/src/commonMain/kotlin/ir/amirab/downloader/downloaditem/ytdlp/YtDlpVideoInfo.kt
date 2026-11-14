@@ -85,9 +85,13 @@ object YtDlpInfoParser {
      * The size is estimated the same way yt-dlp would pick formats for that option.
      */
     fun qualityOptions(info: YtDlpVideoInfo): List<YtDlpQualityOption> {
-        val videos = info.formats.filter { it.hasVideo && it.height != null }
+        val allVideos = info.formats.filter { it.hasVideo && it.height != null }
+        // HLS formats report no filesize and their tbr is the PEAK bandwidth (~2x the real average),
+        // so size estimates come from formats with a known size whenever such formats exist
+        val sizedVideos = allVideos.filter { it.size != null }
+        val videos = sizedVideos.ifEmpty { allVideos }
         val audios = info.formats.filter { it.hasAudio && !it.hasVideo }
-        val maxHeight = videos.maxOfOrNull { it.height!! } ?: 0
+        val maxHeight = allVideos.maxOfOrNull { it.height!! } ?: 0
 
         // Best1080: "bv*[height<=1080][ext=mp4]" -> mp4 first
         fun bestMp4Video(maxH: Int): YtDlpFormatInfo? {
@@ -112,11 +116,11 @@ object YtDlpInfoParser {
         }
 
         val result = mutableListOf<YtDlpQualityOption>()
-        if (videos.isNotEmpty()) {
+        if (allVideos.isNotEmpty()) {
             result += YtDlpQualityOption(YtDlpQuality.Best1080, sum(bestMp4Video(1080), bestM4a ?: bestAudio))
             for (q in listOf(YtDlpQuality.P2160, YtDlpQuality.P1440, YtDlpQuality.P720, YtDlpQuality.P480)) {
                 val h = q.maxHeight!!
-                val exists = videos.any { it.height == h }
+                val exists = allVideos.any { it.height == h }
                 // 720p/480p only make sense when Best would pick something bigger
                 val useful = if (h > 1080) maxHeight >= h else maxHeight > h
                 if (exists && useful) {
@@ -124,7 +128,7 @@ object YtDlpInfoParser {
                 }
             }
         }
-        if (audios.isNotEmpty() || videos.isEmpty()) {
+        if (audios.isNotEmpty() || allVideos.isEmpty()) {
             result += YtDlpQualityOption(YtDlpQuality.AudioM4a, (bestM4a ?: bestAudio)?.sizeOrEstimate(info.duration))
             // MP3 is re-encoded (VBR ~245 kbps for --audio-quality 0): rough estimate from duration
             result += YtDlpQualityOption(
