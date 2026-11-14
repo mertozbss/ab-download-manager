@@ -3,6 +3,7 @@ package com.abdownloadmanager.integration
 import com.abdownloadmanager.integration.model.AddDownloadsFromIntegration
 import com.abdownloadmanager.integration.model.ApiQueueModel
 import com.abdownloadmanager.integration.model.NewDownloadTask
+import com.abdownloadmanager.integration.model.YtDlpDownloadCredentialsFromIntegration
 import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
@@ -15,6 +16,7 @@ import io.ktor.server.testing.testApplication
 import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertNotNull
 
@@ -30,6 +32,10 @@ private class RecordingHandler : IntegrationHandler {
 /** The exact body an attacking web page would send (silent add + silent start). */
 private const val MALICIOUS_BODY =
     """{"items":[{"type":"http","link":"https://evil.example/payload.exe"}],"options":{"silentAdd":true,"silentStart":true}}"""
+
+/** what a web page would send to make the app run yt-dlp */
+private const val YTDLP_BODY =
+    """{"items":[{"type":"ytdlp","link":"https://www.youtube.com/watch?v=BaW_jenozKc","title":"t"}],"options":{"silentAdd":true,"silentStart":true}}"""
 
 class LocalRequestGuardTest {
     private val json = Json { ignoreUnknownKeys = true }
@@ -93,6 +99,39 @@ class LocalRequestGuardTest {
         val r = postAdd("localhost:15151", null)
         assertEquals(HttpStatusCode.OK, r.status)
         assertEquals(1, handler.added.size)
+    }
+
+    // ---- yt-dlp (YouTube) requests: same guard (mertozbss fork) ----
+
+    private suspend fun ApplicationTestBuilder.postYtDlp(host: String, origin: String?) =
+        client.post("/add") {
+            header(HttpHeaders.Host, host)
+            if (origin != null) header(HttpHeaders.Origin, origin)
+            contentType(ContentType.Text.Plain)
+            setBody(YTDLP_BODY)
+        }
+
+    @Test
+    fun `ytdlp request from a web page origin is rejected`() = runApp { handler ->
+        val r = postYtDlp("localhost:15151", "https://www.youtube.com")
+        assertEquals(HttpStatusCode.Forbidden, r.status)
+        assertEquals(0, handler.added.size)
+    }
+
+    @Test
+    fun `ytdlp request with rebinding host is rejected`() = runApp { handler ->
+        val r = postYtDlp("evil.example:15151", "chrome-extension://bbobopahenonfdgjgaleledndnnfhooj")
+        assertEquals(HttpStatusCode.Forbidden, r.status)
+        assertEquals(0, handler.added.size)
+    }
+
+    @Test
+    fun `ytdlp request from the extension is accepted and parsed`() = runApp { handler ->
+        val r = postYtDlp("localhost:15151", "chrome-extension://bbobopahenonfdgjgaleledndnnfhooj")
+        assertEquals(HttpStatusCode.OK, r.status)
+        val item = handler.added.single().items.single()
+        assertIs<YtDlpDownloadCredentialsFromIntegration>(item)
+        assertEquals("https://www.youtube.com/watch?v=BaW_jenozKc", item.link)
     }
 
     @Test
