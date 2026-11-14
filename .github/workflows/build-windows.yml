@@ -1,0 +1,91 @@
+name: Build Windows (mertozbss)
+
+# Kendi derlememiz: sadece Windows x64, imzasız.
+# - Elle çalıştırma (Actions > Run workflow) -> artifact olarak indirilebilir build
+# - vX.Y.Z tag'i push edilince -> bu fork'ta Release oluşturur (uygulama içi güncelleme buraya bakar)
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+*"
+
+permissions:
+  contents: write
+
+jobs:
+  supply-chain:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # gradle-wrapper.jar'ın resmi Gradle dağıtımıyla birebir aynı olduğunu doğrular
+      - uses: gradle/actions/wrapper-validation@v4
+
+  build-windows:
+    needs: supply-chain
+    runs-on: windows-2022
+    steps:
+      - name: Checkout (tag'ler dahil; sürüm numarası git tag'inden okunuyor)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JBR
+        uses: actions/setup-java@v4
+        with:
+          distribution: "jetbrains"
+          java-package: "jdk"
+          java-version: "25"
+          check-latest: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build
+        shell: bash
+        env:
+          SKIP_ANDROID_BUILD: "true"
+        run: ./gradlew createReleaseFolderForCi
+
+      - name: Checksums
+        shell: bash
+        run: |
+          cd build/ci-release/binaries
+          sha256sum * | tee SHA256SUMS.txt
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: abdm-windows-x64
+          path: build/ci-release
+
+      - name: Create release (sadece tag push'ta)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: false
+          prerelease: false
+          make_latest: true
+          files: build/ci-release/binaries/*
+          body_path: build/ci-release/release-notes.md
+
+  dependency-graph:
+    # Çözümlenmiş tüm Gradle bağımlılıklarını GitHub'a bildirir -> Dependabot güvenlik uyarıları çalışır
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: "jetbrains"
+          java-package: "jdk"
+          java-version: "25"
+          check-latest: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: gradle/actions/dependency-submission@v4
+        env:
+          SKIP_ANDROID_BUILD: "true"

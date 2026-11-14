@@ -114,7 +114,7 @@ buildConfig {
     buildConfigField(
         "PROJECT_SOURCE_CODE",
         provider {
-            "https://github.com/amir1376/ab-download-manager"
+            "https://github.com/mertozbss/ab-download-manager"
         }
     )
     buildConfigField(
@@ -126,7 +126,7 @@ buildConfig {
     buildConfigField(
         "PROJECT_GITHUB_OWNER",
         provider {
-            "amir1376"
+            "mertozbss"
         }
     )
     buildConfigField(
