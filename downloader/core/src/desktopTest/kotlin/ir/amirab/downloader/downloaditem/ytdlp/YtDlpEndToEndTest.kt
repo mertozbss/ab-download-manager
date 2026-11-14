@@ -20,7 +20,8 @@ import kotlin.test.fail
 class YtDlpEndToEndTest {
     private val enabled = System.getenv("ABDM_E2E") == "1"
     private val root = File(System.getenv("ABDM_E2E_DIR") ?: "build/ytdlp-e2e").absoluteFile
-    private val url = "https://www.youtube.com/watch?v=BaW_jenozKc"
+    private val url = YouTubeUrlNormalizer.normalize(System.getenv("ABDM_E2E_URL") ?: "")
+        ?: "https://www.youtube.com/watch?v=BaW_jenozKc"
 
     private data class RunResult(
         val exit: Int,
@@ -86,7 +87,7 @@ class YtDlpEndToEndTest {
         println("INFO: ${info.title} / ${info.channel} / ${info.duration}s / ${info.formats.size} formats")
         val options = YtDlpInfoParser.qualityOptions(info)
         println("OPTIONS: $options")
-        assertEquals("BaW_jenozKc", info.id)
+        assertEquals(YouTubeUrlNormalizer.extractVideoId(url), info.id)
         assertTrue(options.isNotEmpty())
 
         // 2) each main quality produces exactly one finished file inside the folder
