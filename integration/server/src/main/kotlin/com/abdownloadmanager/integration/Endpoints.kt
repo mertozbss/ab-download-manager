@@ -27,6 +27,7 @@ internal fun Application.setupRouting(
     settings: IntegrationSettings,
 ) {
     val apiKey = settings.apiKey
+    install(LocalRequestGuard)
     install(Authentication) {
         apiKey(AuthOptional) {
             validate { receivedKey ->
