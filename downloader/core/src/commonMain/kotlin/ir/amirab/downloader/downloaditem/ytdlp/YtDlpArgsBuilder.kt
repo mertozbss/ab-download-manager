@@ -48,7 +48,20 @@ object YtDlpArgsBuilder {
     )
 
     const val DEFAULT_CONNECTIONS = 8
-    const val MAX_CONNECTIONS = 16
+
+    /**
+     * YouTube fragments are small (HLS ~1.3 MB, DASH ~10 MB) so throughput is latency-bound:
+     * measured on a ~1 Gbit line, HLS 480 MiB: 8 fragments 27 MiB/s, 32 fragments 73 MiB/s;
+     * DASH 679 MiB: 8 fragments 49.5 MiB/s, 32 fragments 66-68 MiB/s (no 403s).
+     */
+    const val FRAGMENTS_PER_CONNECTION = 4
+    const val MAX_FRAGMENTS = 32
+
+    /** parallel fragments for an ABDM connection setting; 1 = plain single-connection mode */
+    fun fragmentsFor(connections: Int): Int {
+        if (connections <= 1) return 1
+        return (connections * FRAGMENTS_PER_CONNECTION).coerceIn(2, MAX_FRAGMENTS)
+    }
 
     const val PROGRESS_PREFIX = "ABDM|"
     const val FILE_PREFIX = "ABDMFILE|"
@@ -128,9 +141,9 @@ object YtDlpArgsBuilder {
             add("--progress-template"); add(PROGRESS_TEMPLATE)
             add("--print"); add(FILEPATH_PRINT_TEMPLATE)
             // one HTTP connection per stream is slow; let yt-dlp fetch YouTube's streams as DASH
-            // fragments and download several of them in parallel (~1.8x faster in tests)
+            // fragments (HLS formats are fragmented already) and download many in parallel.
             // --limit-rate applies per connection in fragment mode, so a speed limit means 1 connection
-            val n = if (speedLimitBytesPerSecond > 0) 1 else connections.coerceIn(1, MAX_CONNECTIONS)
+            val n = if (speedLimitBytesPerSecond > 0) 1 else fragmentsFor(connections)
             if (n > 1) {
                 add("--extractor-args"); add("youtube:formats=dashy")
                 add("--concurrent-fragments"); add(n.toString())

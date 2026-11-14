@@ -91,7 +91,11 @@ class YtDlpArgsBuilderTest {
     fun `parallel fragments follow the connection setting`() {
         val args = YtDlpArgsBuilder.downloadArgs(tools, url, YtDlpQuality.Best1080, File("C:/D"), File("C:/T"), "a.mp4", connections = 32)
         assertEquals("youtube:formats=dashy", args[args.indexOf("--extractor-args") + 1])
-        assertEquals("16", args[args.indexOf("--concurrent-fragments") + 1])
+        assertEquals("32", args[args.indexOf("--concurrent-fragments") + 1]) // capped
+        assertEquals(32, YtDlpArgsBuilder.fragmentsFor(8)) // ABDM default thread count
+        assertEquals(8, YtDlpArgsBuilder.fragmentsFor(2))
+        assertEquals(1, YtDlpArgsBuilder.fragmentsFor(1))
+        assertEquals(1, YtDlpArgsBuilder.fragmentsFor(0))
         val single = YtDlpArgsBuilder.downloadArgs(tools, url, YtDlpQuality.Best1080, File("C:/D"), File("C:/T"), "a.mp4", connections = 1)
         assertFalse("--concurrent-fragments" in single)
         // speed limit would be multiplied by the fragment count -> single connection
