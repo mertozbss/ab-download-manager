@@ -8,6 +8,8 @@ SetCompressor /SOLID lzma
 !define APP_PUBLISHER "{{ app_publisher }}"
 !define APP_NAME "{{ app_name }}"
 !define APP_DISPLAY_NAME "{{ app_display_name }}"
+; Shortcuts of installs made before the display name was changed in this fork
+!define LEGACY_APP_DISPLAY_NAME "AB Download Manager"
 !define APP_DATA_DIR_NAME "{{ app_data_dir_name }}"
 !define APP_VERSION "{{ app_version }}"
 !define APP_VERSION_WITH_BUILD "{{ app_version_with_build }}"
@@ -148,12 +150,14 @@ FunctionEnd
 !macroend
 
 !macro CreateStartMenu
+	RmDir /r "$SMPROGRAMS\${LEGACY_APP_DISPLAY_NAME}"
 	createDirectory "$SMPROGRAMS\${APP_DISPLAY_NAME}"
 	createShortCut "$SMPROGRAMS\${APP_DISPLAY_NAME}\${APP_DISPLAY_NAME}.lnk" "${INSTALL_DIR}\${MAIN_BINARY_NAME}.exe"
 !macroend
 
 !macro RemoveStartMenu
 	RmDir /r "$SMPROGRAMS\${APP_DISPLAY_NAME}"
+	RmDir /r "$SMPROGRAMS\${LEGACY_APP_DISPLAY_NAME}"
 !macroend
 
 !macro RemoveUserData
@@ -162,11 +166,13 @@ FunctionEnd
 !macroend
 
 !macro CreateDesktopShortcut
+	Delete "$DESKTOP\${LEGACY_APP_DISPLAY_NAME}.lnk"
     CreateShortcut "$DESKTOP\${APP_DISPLAY_NAME}.lnk" "${INSTALL_DIR}\${MAIN_BINARY_NAME}.exe"
 !macroend
 
 !macro RemoveDesktopShortCut
 	Delete "$DESKTOP\${APP_DISPLAY_NAME}.lnk"
+	Delete "$DESKTOP\${LEGACY_APP_DISPLAY_NAME}.lnk"
 !macroend
 
 Function .onInstSuccess

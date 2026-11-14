@@ -474,10 +474,15 @@ val updaterModule = module {
         )
     }
 }
+private const val STARTUP_ENTRY_NAME = "AB Download Manager"
+
 val startUpModule = module {
     single {
         Startup.getStartUpManagerForDesktop(
-            name = AppInfo.displayName,
+            // Keep the original entry name, not AppInfo.displayName: the display name was
+            // changed in this fork, and a new name would leave the old autostart entry
+            // (registry value / plist / .desktop file) behind, so the app would start twice.
+            name = STARTUP_ENTRY_NAME,
             path = AppInfo.mainExeFile,
             args = listOf(AppArguments.Args.BACKGROUND),
             packageName = AppInfo.packageName,
