@@ -30,7 +30,6 @@ import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 const val PART_MAX_TRIES = 10
-const val RetryDelay = 1_000L
 
 abstract class PartDownloader<
         TPart : DownloadPart
@@ -51,6 +50,26 @@ abstract class PartDownloader<
     @Volatile
     internal var tries = 0
 
+    /**
+     * Asked when an attempt failed before receiving a single byte (connection refused, error
+     * status, reset before data...), with the number of such failures in a row.
+     *
+     * Return `true` to give the connection slot back: the part stops quietly (status
+     * [PartDownloadStatus.IDLE], its range is kept) so the job can hand that range to a
+     * connection the server does accept. `null` or `false` keeps retrying as usual.
+     */
+    var shouldYieldAfterFailure: ((failuresWithoutData: Int, e: Throwable) -> Boolean)? = null
+
+    /** true while this part gives its connection slot back (see [shouldYieldAfterFailure]) */
+    @Volatile
+    internal var yielding = false
+
+    @Volatile
+    private var receivedDataInThisAttempt = false
+
+    @Volatile
+    internal var failuresWithoutData = 0
+
     // make sure to not lake resource in this exception
     @Volatile
     private var lastCriticalException: Throwable? = null
@@ -67,18 +86,20 @@ abstract class PartDownloader<
             }
             stop = false
             active = true
+            yielding = false
         }
         val scope = CoroutineScope(SupervisorJob()).also {
             this.scope = it
         }
         scope.launch {
             tries = 0
+            failuresWithoutData = 0
             lastCriticalException = null
             lastException = null
             val result = runCatching {
                 while (coroutineContext.isActive || !stop) {
                     if (tries > 0) {
-                        delay(RetryDelay.milliseconds)
+                        delay(PartRetryBackoff.delayFor(tries).milliseconds)
 //                        println("#${part.from}retrying $tries")
                     }
                     if (haveToManyErrors()) {
@@ -100,7 +121,7 @@ abstract class PartDownloader<
                         tries++
                         onCanceled(e)
                         when (canRetry(e)) {
-                            CanRetryResult.Yes -> continue
+                            CanRetryResult.Yes -> if (yieldAfterFailure(e)) break else continue
                             CanRetryResult.No -> {}
                             CanRetryResult.NoAndStopDownloadJob -> iCantRetryAnymore(e)
                         }
@@ -116,7 +137,7 @@ abstract class PartDownloader<
                         is PartDownloadStatus.Canceled -> {
                             tries++
                             when (canRetry(status.e)) {
-                                CanRetryResult.Yes -> continue
+                                CanRetryResult.Yes -> if (yieldAfterFailure(status.e)) break else continue
                                 CanRetryResult.No -> {}
                                 CanRetryResult.NoAndStopDownloadJob -> iCantRetryAnymore(status.e)
                             }
@@ -178,6 +199,26 @@ abstract class PartDownloader<
         }
     }
 
+    /**
+     * @return true if this part should stop and give its connection slot back
+     */
+    private fun yieldAfterFailure(e: Throwable): Boolean {
+        if (receivedDataInThisAttempt) {
+            // the connection worked and then dropped: just reconnect
+            failuresWithoutData = 0
+            return false
+        }
+        failuresWithoutData++
+        val decide = shouldYieldAfterFailure ?: return false
+        // mark first so the job does not count this part as an open connection while deciding
+        yielding = true
+        val shouldYield = runCatching { decide(failuresWithoutData, e) }.getOrDefault(false)
+        if (!shouldYield) {
+            yielding = false
+        }
+        return shouldYield
+    }
+
     lateinit var onTooManyErrors: ((Throwable) -> Unit)
     private fun iCantRetryAnymore(throwable: Throwable) {
         lastCriticalException = throwable
@@ -201,6 +242,7 @@ abstract class PartDownloader<
     abstract suspend fun connectAndVerify(): Connection<*>
 
     private suspend fun download() {
+        receivedDataInThisAttempt = false
         onNewStatus(PartDownloadStatus.Connecting)
         val conn = connectAndVerify()
         thread = thread {
@@ -296,6 +338,8 @@ abstract class PartDownloader<
 //                require (part.current-part.from == totalReadCount)
             if (firstLoop) {
                 tries = 0
+                failuresWithoutData = 0
+                receivedDataInThisAttempt = true
                 onNewStatus(PartDownloadStatus.ReceivingData)
                 firstLoop = false
             }

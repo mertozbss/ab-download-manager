@@ -25,5 +25,11 @@ kotlin {
                 api("io.lindstrom:m3u8-parser:0.29")
             }
         }
+        // engine tests (connection-limited host simulation etc.)
+        getByName("desktopTest") {
+            dependencies {
+                implementation(kotlin("test"))
+            }
+        }
     }
 }

@@ -132,6 +132,8 @@ class HttpDownloadJob(
             return
         }
         _isDownloadActive.update { true }
+        // a fresh start by the user: forget what we learned about the host's connection limit
+        connectionLimit.reset()
         resumeWithNewScope(
             newActiveScope = createAndInitializeDownloadScope(),
             isInFirstResume = true
@@ -171,6 +173,7 @@ class HttpDownloadJob(
                 createPartDownloaderList()
 //                println("part downloaders created")
                 beginDownloadParts()
+                startConnectionSupervisor()
                 startAutoSaver()
                 downloadItem.status = DownloadStatus.Downloading
                 if (downloadItem.startTime == null) {
@@ -282,6 +285,7 @@ class HttpDownloadJob(
             initializeDestination()
         }
         if (previousItem.preferredConnectionCount != downloadItem.preferredConnectionCount) {
+            connectionLimit.reset()
             onPreferredConnectionCountChanged()
         }
         if (previousItem.link != downloadItem.link) {
@@ -312,6 +316,78 @@ class HttpDownloadJob(
     fun getRequestedPartitionCount(): Int {
         return downloadItem.preferredConnectionCount
             ?: downloadManager.settings.defaultThreadCount
+    }
+
+    /**
+     * How many connections the host currently accepts for this download (see [AdaptiveConnectionLimit]).
+     * Starts at the requested count and is lowered when the host refuses connections.
+     */
+    private val connectionLimit = AdaptiveConnectionLimit()
+
+    /**
+     * Number of connections we should keep open right now: the requested count,
+     * unless the host showed us it accepts fewer.
+     */
+    fun getEffectiveConnectionCount(): Int {
+        return connectionLimit.effective(getRequestedPartitionCount())
+    }
+
+    /** an open (or opening) connection that is not giving its slot back */
+    private fun HttpPartDownloader.occupiesConnection(): Boolean {
+        return active && !yielding
+    }
+
+    /**
+     * Called by a part whose attempts keep failing before receiving any data.
+     *
+     * If other parts are receiving data at the same time the server works, it just refuses
+     * this extra connection (connection limit per client). Then retrying it forever only hammers
+     * the host (many hosts then throttle or ban the client) while the range sits at 0 B.
+     * Instead, the part yields: it stops and keeps its range, we lower the effective connection
+     * count to the connections still open, and [beginDownloadParts] hands that range to the
+     * next connection that becomes free.
+     *
+     * If nobody is receiving data it is not a connection limit (network down, link expired...),
+     * so the part keeps retrying and the usual error handling applies.
+     */
+    private fun shouldPartYield(
+        partDownloader: HttpPartDownloader,
+        failuresWithoutData: Int,
+    ): Boolean {
+        if (supportsConcurrent != true) return false
+        if (failuresWithoutData < FAILURES_BEFORE_YIELD) return false
+        synchronized(connectionLimit) {
+            val others = getPartDownloaderList()
+                .filter { it !== partDownloader && it.occupiesConnection() }
+            val serverIsServingOthers = others.any {
+                it.statusFlow.value == PartDownloadStatus.ReceivingData
+            }
+            if (!serverIsServingOthers) return false
+            connectionLimit.onConnectionRefused(
+                stillOpen = others.size,
+                requested = getRequestedPartitionCount(),
+            )
+        }
+        return true
+    }
+
+    /**
+     * Runs while the download is active:
+     * - lets the connection limit probe up again after a quiet period
+     * - makes sure free connection slots get used (a missed wake-up in [beginDownloadParts]
+     *   would otherwise leave them unused until the next part completes)
+     */
+    private fun startConnectionSupervisor() {
+        activeDownloadScope?.launch {
+            while (isActive) {
+                delay(CONNECTION_SUPERVISOR_TICK_MS.milliseconds)
+                val probed = connectionLimit.tryProbeUp(getRequestedPartitionCount())
+                val open = getPartDownloaderList().count { it.occupiesConnection() }
+                if (probed || open < getEffectiveConnectionCount()) {
+                    beginDownloadParts()
+                }
+            }
+        }
     }
 
     private suspend fun createPartsIfNotCreated() {
@@ -361,8 +437,8 @@ class HttpDownloadJob(
 //            c.incrementAndGet()
             try {
                 val activeCount = getPartDownloaderList()
-                    .count { it.active }
-                val howMuchCreate = getRequestedPartitionCount() - activeCount
+                    .count { it.occupiesConnection() }
+                val howMuchCreate = getEffectiveConnectionCount() - activeCount
                 if (howMuchCreate > 0) {
                     val mutableInactivePartDownloaderList = getPartDownloaderList()
                         .filter { !it.active && !it.part.isCompleted }
@@ -412,7 +488,7 @@ class HttpDownloadJob(
                 if (howMuchCreate < 0) {
                     partDownloaderList.values
                         .toList()
-                        .filter { it.active }
+                        .filter { it.occupiesConnection() }
                         .sortedByDescending { it.part.from }
                         .take(-howMuchCreate)
                         .onEach {
@@ -444,7 +520,7 @@ class HttpDownloadJob(
             }
         }
         val allHaveError = partDownloaderList.values
-            .filter { it.active }
+            .filter { it.occupiesConnection() }
             .all {
                 it.injured()
             }
@@ -609,6 +685,9 @@ class HttpDownloadJob(
                     partDownloader.onTooManyErrors = {
                         onPartHaveToManyError(it)
                     }
+                    partDownloader.shouldYieldAfterFailure = { failuresWithoutData, _ ->
+                        shouldPartYield(partDownloader, failuresWithoutData)
+                    }
                     //we should close that scope after we don't need it anymore!
                     listenerJobs[part.from] = partDownloader.statusFlow.onEach { status ->
                         //TODO probably bug here
@@ -771,5 +850,11 @@ class HttpDownloadJob(
 
     override suspend fun extraConfigsReceived(config: DownloadJobExtraConfig) {
         // we don't have extra configs
+    }
+
+    companion object {
+        /** failed attempts in a row (without data) before a refused part gives its slot back */
+        const val FAILURES_BEFORE_YIELD = 2
+        const val CONNECTION_SUPERVISOR_TICK_MS = 1_000L
     }
 }
