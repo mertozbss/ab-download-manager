@@ -27,12 +27,6 @@ fun ShowAboutDialog(appComponent: AppComponent) {
             onClose = {
                 appComponent.closeAbout()
             },
-            onRequestShowOpenSourceLibraries = {
-                appComponent.openOpenSourceLibrariesPage()
-            },
-            onRequestShowTranslators = {
-                appComponent.openTranslatorsPage()
-            }
         )
     }
 }
@@ -40,8 +34,6 @@ fun ShowAboutDialog(appComponent: AppComponent) {
 @Composable
 fun AboutDialog(
     onClose: () -> Unit,
-    onRequestShowOpenSourceLibraries: () -> Unit,
-    onRequestShowTranslators: () -> Unit,
 ) {
     CustomWindow(
         resizable = false,
@@ -63,9 +55,6 @@ fun AboutDialog(
         ),
     ) {
         WindowIcon(MyIcons.info)
-        AboutPage(
-            onRequestShowOpenSourceLibraries = onRequestShowOpenSourceLibraries,
-            onRequestShowTranslators = onRequestShowTranslators
-        )
+        AboutPage()
     }
 }

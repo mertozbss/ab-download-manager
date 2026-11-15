@@ -15,39 +15,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.*
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.abdownloadmanager.shared.util.SharedConstants
-import com.abdownloadmanager.shared.util.ui.widget.MyIcon
-import com.abdownloadmanager.shared.ui.widget.IconActionButton
-import com.abdownloadmanager.shared.ui.widget.Tooltip
 import com.abdownloadmanager.shared.util.div
 import com.abdownloadmanager.resources.Res
-import com.abdownloadmanager.shared.ui.widget.ActionButton
-import com.abdownloadmanager.shared.ui.widget.LinkText
-import com.abdownloadmanager.shared.util.ui.LocalContentColor
-import com.abdownloadmanager.shared.util.ui.theme.myShapes
-import ir.amirab.util.URLOpener
-import ir.amirab.util.HttpUrlUtils
-import ir.amirab.util.compose.IconSource
-import ir.amirab.util.compose.StringSource
-import ir.amirab.util.compose.asStringSource
 import ir.amirab.util.compose.resources.myStringResource
 
 @Composable
-fun AboutPage(
-    onRequestShowOpenSourceLibraries: () -> Unit,
-    onRequestShowTranslators: () -> Unit,
-) {
+fun AboutPage() {
     Box {
         BackgroundEffects()
-        RenderAppInfo(
-            modifier = Modifier,
-            onRequestShowOpenSourceLibraries = onRequestShowOpenSourceLibraries,
-            onRequestShowTranslators = onRequestShowTranslators,
-        )
+        RenderAppInfo(Modifier)
     }
 }
 
@@ -108,224 +86,55 @@ private fun AppIconAndVersion(
 @Composable
 private fun RenderAppInfo(
     modifier: Modifier,
-    onRequestShowOpenSourceLibraries: () -> Unit,
-    onRequestShowTranslators: () -> Unit,
 ) {
     Row(
         modifier.fillMaxSize(),
     ) {
-        Column(
-            Modifier.width(250.dp),
-            verticalArrangement = Arrangement.SpaceBetween,
-        ) {
-            AppIconAndVersion(Modifier.fillMaxWidth())
-            Spacer(Modifier.weight(1f))
-            Column(
-                Modifier
-                    .fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Text(
-                    myStringResource(Res.string.developed_with_love_for_you),
-                )
-                Spacer(Modifier.height(8.dp))
-                DonateButton()
-                Spacer(Modifier.height(8.dp))
-                Spacer(
-                    Modifier
-                        .fillMaxWidth()
-                        .background(myColors.onBackground / 0.05f)
-                        .height(1.dp)
-                )
-                Spacer(Modifier.height(8.dp))
-                val websiteUrl = SharedConstants.projectWebsite
-                val websiteDisplayName = remember(websiteUrl) {
-                    HttpUrlUtils.getHost(websiteUrl) ?: websiteUrl
-                }
-                LinkText(
-                    text = websiteDisplayName,
-                    link = websiteUrl,
-                    showExternalIndicator = false,
-                )
-                Spacer(Modifier.height(16.dp))
-            }
-        }
+        AppIconAndVersion(
+            Modifier
+                .width(250.dp)
+                .fillMaxHeight()
+                .wrapContentHeight(Alignment.CenterVertically)
+        )
         Spacer(
             Modifier
                 .fillMaxHeight()
                 .width(1.dp)
                 .background(myColors.onBackground.copy(0.15f))
         )
-        Column(
-            Modifier.weight(1f)
-        ) {
-            CreditsSection(
-                modifier = Modifier.fillMaxWidth().weight(1f),
-                onRequestShowOpenSourceLibraries = onRequestShowOpenSourceLibraries,
-                onRequestShowTranslators = onRequestShowTranslators,
-            )
-            Spacer(Modifier.height(1.dp).fillMaxWidth().background(myColors.onBackground / 0.15f))
-            SocialAndLinks(
-                Modifier
-                    .fillMaxWidth()
-                    .background(myColors.surface / 0.5f)
-                    .padding(top = 12.dp)
-                    .padding(bottom = 16.dp)
-                    .wrapContentWidth(),
-                horizontalPadding = 8.dp,
-            )
-        }
-    }
-}
-
-@Composable
-private fun SocialAndLinks(
-    modifier: Modifier = Modifier,
-    horizontalPadding: Dp,
-) {
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        modifier = modifier
-            .padding(
-                horizontal = horizontalPadding,
-            )
-    ) {
-        SocialSmallButton(
-            MyIcons.earth,
-            Res.string.visit_the_project_website.asStringSource(),
-            onClick = {
-                URLOpener.openUrl(SharedConstants.projectWebsite)
-            }
-        )
-        SocialSmallButton(
-            MyIcons.openSource,
-            Res.string.view_the_source_code.asStringSource(),
-            onClick = {
-                URLOpener.openUrl(SharedConstants.projectSourceCode)
-            }
-        )
-        SocialSmallButton(
-            MyIcons.speaker,
-            Res.string.channel.asStringSource(),
-            onClick = {
-                URLOpener.openUrl(SharedConstants.telegramChannelUrl)
-            }
-        )
-        SocialSmallButton(
-            MyIcons.group,
-            Res.string.group.asStringSource(),
-            onClick = {
-                URLOpener.openUrl(SharedConstants.telegramGroupUrl)
-            }
-        )
-        SocialSmallButton(
-            MyIcons.language,
-            Res.string.translators_contribute_title.asStringSource(),
-            onClick = {
-                URLOpener.openUrl(SharedConstants.projectTranslations)
-            }
+        AppDescription(
+            Modifier
+                .weight(1f)
+                .fillMaxHeight()
         )
     }
 }
 
 @Composable
-private fun CreditsSection(
-    modifier: Modifier = Modifier,
-    onRequestShowOpenSourceLibraries: () -> Unit,
-    onRequestShowTranslators: () -> Unit,
+private fun AppDescription(
+    modifier: Modifier,
 ) {
     Column(
         modifier
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp)
-            .padding(vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+            .padding(horizontal = 20.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.Center,
     ) {
-        val itemModifier = Modifier.fillMaxWidth()
-        AboutPageListItemButton(
-            itemModifier,
-            icon = MyIcons.hearth,
-            title = Res.string.this_is_a_free_and_open_source_software.asStringSource(),
-            description = Res.string.view_the_source_code.asStringSource(),
-            onClick = {
-                URLOpener.openUrl(AppInfo.sourceCode)
-            }
+        Text(
+            myStringResource(Res.string.about_app_tagline),
+            fontSize = myTextSizes.lg,
+            fontWeight = FontWeight.Bold,
         )
-        AboutPageListItemButton(
-            itemModifier,
-            icon = MyIcons.openSource,
-            title = Res.string.powered_by_open_source_software.asStringSource(),
-            description = Res.string.view_the_open_source_licenses.asStringSource(),
-            onClick = {
-                onRequestShowOpenSourceLibraries()
-            }
-        )
-        AboutPageListItemButton(
-            itemModifier,
-            icon = MyIcons.language,
-            title = Res.string.localized_by_translators.asStringSource(),
-            description = Res.string.meet_the_translators.asStringSource(),
-            onClick = {
-                onRequestShowTranslators()
-            }
-        )
-    }
-}
-
-@Composable
-private fun SocialSmallButton(
-    icon: IconSource,
-    title: StringSource,
-    onClick: () -> Unit,
-) {
-    Tooltip(title) {
-        IconActionButton(
-            icon,
-            contentDescription = title,
-            onClick = onClick,
-        )
-    }
-}
-
-@Composable
-private fun AboutPageListItemButton(
-    modifier: Modifier,
-    icon: IconSource,
-    title: StringSource,
-    description: StringSource,
-    onClick: () -> Unit,
-) {
-    val shape = myShapes.defaultRounded
-    Row(
-        modifier
-            .border(1.dp, myColors.onBackground / 0.15f, shape)
-            .clip(shape)
-            .clickable(onClick = onClick)
-            .background(myColors.surface / 0.5f)
-            .padding(
-                horizontal = 8.dp,
-                vertical = 8.dp,
-            ),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        MyIcon(
-            icon = icon,
-            contentDescription = null,
-            modifier = Modifier.size(24.dp)
-        )
-        Spacer(Modifier.width(8.dp))
-        Column {
+        Spacer(Modifier.height(12.dp))
+        WithContentAlpha(0.85f) {
             Text(
-                title.rememberString(),
+                myStringResource(Res.string.about_app_description),
                 fontSize = myTextSizes.base,
-                fontWeight = FontWeight.Bold,
+                lineHeight = myTextSizes.base * 1.6f,
             )
-            Spacer(Modifier.height(2.dp))
-            Text(description.rememberString())
         }
     }
 }
-
 
 @Composable
 private fun BoxScope.BackgroundEffects() {
@@ -371,25 +180,5 @@ private fun BoxScope.BackgroundEffects() {
             .background(
                 myColors.secondary / 0.15f
             )
-    )
-}
-
-@Composable
-private fun DonateButton() {
-    ActionButton(
-        backgroundColor = SolidColor(LocalContentColor.current / 0.05f),
-        start = {
-            MyIcon(
-                MyIcons.hearth,
-                null,
-                modifier = Modifier.size(16.dp),
-                tint = myColors.error,
-            )
-            Spacer(Modifier.width(8.dp))
-        },
-        text = myStringResource(Res.string.donate),
-        onClick = {
-            URLOpener.openUrl(SharedConstants.donateLink)
-        }
     )
 }
