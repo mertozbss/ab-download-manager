@@ -14,7 +14,7 @@ data class DownloadSettings(
     var appendExtensionToIncompleteDownloads: Boolean = false,
 ) {
     companion object {
-        const val DEFAULT_THREAD_COUNT: Int = 8
+        const val DEFAULT_THREAD_COUNT: Int = 32
         const val DEFAULT_MIN_PART_SIZE: Long = 512 * 1024L
         const val MIN_ALLOWED_MIN_PART_SIZE: Long = 1 * 1024L
         const val MAX_ALLOWED_MIN_PART_SIZE: Long = 2 * 1024 * 1024 * 1024L
