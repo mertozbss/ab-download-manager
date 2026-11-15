@@ -24,6 +24,11 @@ import ir.amirab.util.compose.localizationmanager.LanguageManager
 import ir.amirab.util.flow.mapStateFlow
 import ir.amirab.util.flow.mapTwoWayStateFlow
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.launch
+import com.abdownloadmanager.shared.ui.configurable.item.NavigatableConfigurable
+import ir.amirab.downloader.downloaditem.ytdlp.tools.YtDlpTool
+import ir.amirab.downloader.downloaditem.ytdlp.tools.YtDlpToolManager
+import ir.amirab.util.compose.combineStringSources
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 import kotlin.time.Duration.Companion.milliseconds
@@ -41,6 +46,10 @@ sealed class SettingSection(
 
     data object BrowserIntegration :
         SettingSection(MyIcons.earth, Res.string.browser_integration.asStringSource())
+
+    // mertozbss fork: yt-dlp / ffmpeg / deno versions + update button
+    data object YouTube :
+        SettingSection(MyIcons.videoFile, Res.string.ytdlp_settings_section.asStringSource())
 }
 
 interface SettingSectionGetter {
@@ -61,6 +70,52 @@ class DesktopSettingsComponent(
     private val languageManager by inject<LanguageManager>()
     private val fontManager by inject<FontManager>()
     private val customRenderApi by inject<CustomRenderApi>()
+    private val ytDlpToolManager by inject<YtDlpToolManager>()
+    private val ytDlpUpdateMessage = MutableStateFlow<String?>(null)
+
+    private fun ytDlpComponentsDescription(): StringSource {
+        val dateFormat = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm")
+        val lines = YtDlpTool.entries.map { tool ->
+            val info = ytDlpToolManager.installed(tool)
+            if (info == null) {
+                listOf("${tool.displayName}: ".asStringSource(), Res.string.ytdlp_not_installed.asStringSource())
+                    .combineStringSources()
+            } else {
+                listOf(
+                    "${tool.displayName}: ${info.version}  (".asStringSource(),
+                    Res.string.ytdlp_installed_at.asStringSource(),
+                    " ${dateFormat.format(java.util.Date(info.installedAt))})".asStringSource(),
+                ).combineStringSources()
+            }
+        }
+        val status = when (val st = ytDlpToolManager.status.value) {
+            is YtDlpToolManager.Status.Working -> listOf(Res.string.ytdlp_updating.asStringSource(), " ${st.message}".asStringSource()).combineStringSources()
+            else -> ytDlpUpdateMessage.value?.asStringSource()
+        }
+        return (listOf(Res.string.ytdlp_components_description.asStringSource()) + lines + listOfNotNull(status))
+            .combineStringSources(System.lineSeparator())
+    }
+
+    private fun refreshYouTubePage() {
+        if (currentPage.value == YouTube) {
+            _configurables.value = allConfigs[YouTube]
+        }
+    }
+
+    private fun updateYouTubeComponents() {
+        if (ytDlpToolManager.status.value is YtDlpToolManager.Status.Working) return
+        scope.launch {
+            val job = launch {
+                ytDlpToolManager.status.collect { refreshYouTubePage() }
+            }
+            ytDlpUpdateMessage.value = runCatching { ytDlpToolManager.updateAll() }.fold(
+                onSuccess = { r -> "✓ " + (r.updated + r.upToDate).joinToString(", ") },
+                onFailure = { e -> "✗ " + (e.message ?: e::class.simpleName.orEmpty()).take(300) },
+            )
+            job.cancel()
+            refreshYouTubePage()
+        }
+    }
     private val allConfigs = object : SettingSectionGetter {
         override operator fun get(key: SettingSection): List<ConfigurableGroup> {
             return when (key) {
@@ -147,6 +202,18 @@ class DesktopSettingsComponent(
                     )
                 )
 
+                YouTube -> listOf(
+                    ConfigurableGroup(
+                        nestedConfigurable = listOf(
+                            NavigatableConfigurable(
+                                title = Res.string.ytdlp_update_components.asStringSource(),
+                                description = ytDlpComponentsDescription(),
+                                onRequestNavigate = { updateYouTubeComponents() },
+                            )
+                        )
+                    )
+                )
+
                 DownloadEngine -> listOf(
                     ConfigurableGroup(
                         nestedConfigurable = listOf(
@@ -224,6 +291,7 @@ class DesktopSettingsComponent(
         DownloadEngine,
         Network,
         BrowserIntegration,
+        YouTube,
     )
     private val _currentPage: MutableStateFlow<SettingSection> = MutableStateFlow(Appearance)
     val currentPage: StateFlow<SettingSection> = _currentPage.asStateFlow()

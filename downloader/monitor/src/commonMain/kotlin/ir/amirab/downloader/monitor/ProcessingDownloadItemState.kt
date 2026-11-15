@@ -85,7 +85,8 @@ data class DurationBasedProcessingDownloadItemState(
     override val progress: Long,
     override val percent: Int,
     override val isWaiting: Boolean,
-
+    /** yt-dlp items (mertozbss fork): show the size in bytes, not the duration */
+    val showSizeInBytes: Boolean = false,
 ) : ProcessingDownloadItemState {
 
     override val hasProgress get() = progress > 0

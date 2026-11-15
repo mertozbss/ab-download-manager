@@ -31,6 +31,20 @@ data class HLSDownloadCredentialsFromIntegration(
     override val suggestedName: String? = null,
 ) : IDownloadCredentialsFromIntegration
 
+/**
+ * A YouTube page URL that the app downloads with yt-dlp (mertozbss fork).
+ * The app re-validates / normalizes [link]; [title] is informational only.
+ */
+@SerialName("ytdlp")
+@Serializable
+data class YtDlpDownloadCredentialsFromIntegration(
+    override val link: String,
+    val title: String? = null,
+    override val downloadPage: String? = null,
+) : IDownloadCredentialsFromIntegration {
+    override val suggestedName: String? get() = title
+}
+
 @Serializable
 data class AddDownloadOptionsFromIntegration(
     val silentAdd: Boolean = false,

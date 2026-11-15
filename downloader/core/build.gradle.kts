@@ -33,3 +33,14 @@ kotlin {
         }
     }
 }
+
+// unit tests for the yt-dlp downloader (mertozbss fork)
+kotlin {
+    sourceSets {
+        val desktopTest by getting {
+            dependencies {
+                implementation(kotlin("test"))
+            }
+        }
+    }
+}

@@ -189,6 +189,8 @@ fun AddDownloadPage(
                 ConfigActionsButtons(component)
             }
         }
+        (component.downloadInputsComponent as? com.abdownloadmanager.shared.downloaderinui.ytdlp.YtDlpNewDownloadInputs)
+            ?.let { YtDlpQualitySection(it) }
         Spacer(Modifier.weight(1f))
         MainActionButtons(component)
         if (component.showSolutionsOnDuplicateDownloadUi) {
